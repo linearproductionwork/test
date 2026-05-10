@@ -1,4 +1,4 @@
-import { useCurrentFrame, useVideoConfig, interpolate } from "remotion";
+import { useCurrentFrame, useVideoConfig, Img, staticFile, interpolate } from "remotion";
 
 export const MotionBackground: React.FC = () => {
   const frame = useCurrentFrame();
@@ -6,124 +6,80 @@ export const MotionBackground: React.FC = () => {
 
   const t = frame / fps;
 
-  // Slow breath — orb pulses gently, ~4s cycle
-  const breathe = Math.sin(t * (1 / 4) * Math.PI * 2) * 0.5 + 0.5;
-
-  // Secondary shimmer — slightly faster, offset phase
-  const shimmer = Math.sin(t * (1 / 2.6) * Math.PI * 2 + 1.4) * 0.5 + 0.5;
-
-  // Very slow drift — imperceptible moment-to-moment, alive over 10s
-  const driftX = interpolate(frame, [0, durationInFrames], [0, 18], {
-    extrapolateRight: "clamp",
-  });
-  const driftY = interpolate(frame, [0, durationInFrames], [0, -12], {
+  // Slow Ken Burns — barely perceptible zoom, adds life without distraction
+  const scale = interpolate(frame, [0, durationInFrames], [1.0, 1.05], {
     extrapolateRight: "clamp",
   });
 
-  // Orb scale breathes between 1.0 and 1.06
-  const orbScale = 1.0 + breathe * 0.06;
+  // Very slow drift in image space
+  const driftX = interpolate(frame, [0, durationInFrames], [0, -10], {
+    extrapolateRight: "clamp",
+  });
+  const driftY = interpolate(frame, [0, durationInFrames], [0, 6], {
+    extrapolateRight: "clamp",
+  });
 
-  // Per-frame grain seed
+  // Breathing light over the glow region — one slow 6s cycle
+  const breathe = Math.sin(t * (1 / 6) * Math.PI * 2) * 0.5 + 0.5;
+
+  // Per-frame grain seed for animated film grain
   const grainSeed = frame % 200;
 
-  // Orb center — matches reference: right-of-center, slightly low
-  const cx = 1920 * 0.58 + driftX;
-  const cy = 1080 * 0.56 + driftY;
-
   return (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        position: "relative",
-        overflow: "hidden",
-        background: "#000005",
-      }}
-    >
-      {/* ── Outer diffuse halo ── */}
-      <div
-        style={{
-          position: "absolute",
-          width: 960,
-          height: 960,
-          left: cx - 480,
-          top: cy - 480,
-          borderRadius: "50%",
-          background:
-            "radial-gradient(ellipse, rgba(18,40,220,0.38) 0%, rgba(8,18,140,0.18) 40%, transparent 70%)",
-          opacity: 0.7 + breathe * 0.25,
-          filter: "blur(60px)",
-          transform: `scale(${orbScale})`,
-          transformOrigin: "center center",
-        }}
-      />
+    // No overflow:hidden here — Remotion's canvas clips to 1920×1080 naturally.
+    // overflow:hidden on the root would clip the portrait wrapper in pre-rotation
+    // layout space, causing the black-bars bug seen in the studio preview.
+    <div style={{ width: "100%", height: "100%", position: "relative", background: "#030810" }}>
 
-      {/* ── Mid blue glow ── */}
+      {/* ── Portrait wrapper, rotated -90° CCW to fill landscape canvas ──
+          1080×1920 centered at canvas origin (960,540) so after rotation
+          it maps exactly onto 1920×1080. Transform-origin is the element's
+          own center, which equals the canvas center. */}
       <div
         style={{
           position: "absolute",
-          width: 560,
-          height: 560,
-          left: cx - 280,
-          top: cy - 280,
-          borderRadius: "50%",
-          background:
-            "radial-gradient(ellipse, rgba(40,80,255,0.72) 0%, rgba(18,45,210,0.45) 38%, transparent 68%)",
-          opacity: 0.75 + shimmer * 0.2,
-          filter: "blur(32px)",
-          transform: `scale(${orbScale})`,
+          width: 1080,
+          height: 1920,
+          left: 420,    // (1920 − 1080) / 2
+          top: -420,    // (1080 − 1920) / 2
           transformOrigin: "center center",
+          transform: `rotate(-90deg) scale(${scale}) translate(${driftX}px, ${driftY}px)`,
         }}
-      />
+      >
+        <Img
+          src={staticFile("bg.jpg")}
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        />
+      </div>
 
-      {/* ── Bright inner core ── */}
+      {/* ── Subtle breathing bloom over the image's bright teal region ──
+          Colour-matched so it feels intrinsic, not overlaid. */}
       <div
         style={{
           position: "absolute",
-          width: 220,
-          height: 220,
-          left: cx - 110,
-          top: cy - 110,
+          width: 900,
+          height: 700,
+          left: -160,
+          top: -100,
           borderRadius: "50%",
-          background:
-            "radial-gradient(ellipse, rgba(210,225,255,0.95) 0%, rgba(100,140,255,0.80) 35%, rgba(40,80,240,0.50) 65%, transparent 85%)",
-          opacity: 0.88 + breathe * 0.12,
-          filter: "blur(10px)",
-          transform: `scale(${orbScale})`,
-          transformOrigin: "center center",
-        }}
-      />
-
-      {/* ── Specular hot spot — the white peak ── */}
-      <div
-        style={{
-          position: "absolute",
-          width: 80,
-          height: 80,
-          left: cx - 40,
-          top: cy - 40,
-          borderRadius: "50%",
-          background:
-            "radial-gradient(ellipse, rgba(255,255,255,0.95) 0%, rgba(200,215,255,0.60) 55%, transparent 80%)",
-          opacity: 0.80 + shimmer * 0.18,
-          filter: "blur(4px)",
-          transform: `scale(${orbScale})`,
-          transformOrigin: "center center",
-        }}
-      />
-
-      {/* ── Vignette — pushes pure black into corners ── */}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          background:
-            "radial-gradient(ellipse 70% 70% at 58% 56%, transparent 30%, rgba(0,0,4,0.88) 100%)",
+          background: "radial-gradient(ellipse, rgba(20,130,165,0.09) 0%, transparent 65%)",
+          opacity: 0.25 + breathe * 0.2,
+          filter: "blur(90px)",
           pointerEvents: "none",
         }}
       />
 
-      {/* ── Film grain pass 1 — coarse, overlay ── */}
+      {/* ── Vignette — deepens corners, keeps focus on the light source ── */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "radial-gradient(ellipse 82% 82% at 50% 50%, transparent 42%, rgba(1,4,10,0.75) 100%)",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* ── Film grain pass 1 — coarse fractalNoise, overlay blend ── */}
       <svg
         style={{
           position: "absolute",
@@ -148,7 +104,7 @@ export const MotionBackground: React.FC = () => {
         <rect width="100%" height="100%" filter="url(#grain)" />
       </svg>
 
-      {/* ── Film grain pass 2 — fine, screen, lifts mid-tones ── */}
+      {/* ── Film grain pass 2 — fine, screen blend, lifts mid-tones ── */}
       <svg
         style={{
           position: "absolute",
@@ -172,6 +128,7 @@ export const MotionBackground: React.FC = () => {
         </filter>
         <rect width="100%" height="100%" filter="url(#grain2)" />
       </svg>
+
     </div>
   );
 };
