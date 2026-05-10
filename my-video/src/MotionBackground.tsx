@@ -1,24 +1,29 @@
-import { useCurrentFrame, useVideoConfig } from "remotion";
+import { useCurrentFrame, useVideoConfig, Img, staticFile, interpolate } from "remotion";
 
 export const MotionBackground: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { durationInFrames, fps } = useVideoConfig();
 
   const t = frame / fps;
 
-  // Slow, organic breathing cycles — all offset so they never sync
-  const breathe1 = Math.sin(t * 0.35 * Math.PI * 2) * 0.5 + 0.5;
-  const breathe2 = Math.sin(t * 0.22 * Math.PI * 2 + 1.8) * 0.5 + 0.5;
-  const breathe3 = Math.sin(t * 0.18 * Math.PI * 2 + 3.4) * 0.5 + 0.5;
+  // Slow Ken Burns — 4% zoom over 10s, barely perceptible but removes static feel
+  const scale = interpolate(frame, [0, durationInFrames], [1.0, 1.04], {
+    extrapolateRight: "clamp",
+  });
 
-  // Subtle slow drift — imperceptible moment-to-moment, visible as life
-  const driftX = Math.sin(t * 0.1 * Math.PI * 2) * 40;
-  const driftY = Math.cos(t * 0.08 * Math.PI * 2) * 25;
-  const driftX2 = Math.sin(t * 0.07 * Math.PI * 2 + 2.1) * 30;
-  const driftY2 = Math.cos(t * 0.11 * Math.PI * 2 + 1.0) * 35;
+  // Gentle slow drift — moves in image space, feels like a breath
+  const driftX = interpolate(frame, [0, durationInFrames], [0, -8], {
+    extrapolateRight: "clamp",
+  });
+  const driftY = interpolate(frame, [0, durationInFrames], [0, 5], {
+    extrapolateRight: "clamp",
+  });
 
-  // Grain seed cycles so film grain animates every frame
+  // Per-frame grain seed — gives true animated film grain on every rendered frame
   const grainSeed = frame % 200;
+
+  // Subtle breathing on the light region — one slow cycle over ~6s
+  const breathe = Math.sin(t * (1 / 6) * Math.PI * 2) * 0.5 + 0.5;
 
   return (
     <div
@@ -27,94 +32,57 @@ export const MotionBackground: React.FC = () => {
         height: "100%",
         position: "relative",
         overflow: "hidden",
-        background: "#03090f",
+        background: "#030810",
       }}
     >
-      {/* ── Base gradient ── */}
-      <div
+      {/* ── Real image — portrait 9:16, rotated -90° CCW to landscape 16:9 ──
+          Pre-rotation size 1080×1920 centered at canvas origin (960, 540)
+          so after rotation it fills 1920×1080 exactly. Scale + drift ride
+          the same transform so Ken Burns stays anchored to canvas center. */}
+      <Img
+        src={staticFile("bg.jpg")}
         style={{
           position: "absolute",
-          inset: 0,
-          background:
-            "radial-gradient(ellipse 120% 90% at 10% 20%, #0b3248 0%, #050e1a 55%, #020609 100%)",
+          width: 1080,
+          height: 1920,
+          left: 420,   // (1920 - 1080) / 2
+          top: -420,   // (1080 - 1920) / 2
+          transformOrigin: "center center",
+          transform: `rotate(-90deg) scale(${scale}) translate(${driftX}px, ${driftY}px)`,
+          objectFit: "cover",
         }}
       />
 
-      {/* ── Upper-left teal bloom ── */}
+      {/* ── Subtle light bloom — breathes slightly over the bright area,
+          colour-matched to the image so it feels intrinsic not overlaid ── */}
       <div
         style={{
           position: "absolute",
-          width: 1100,
-          height: 850,
-          left: -280 + driftX * 0.6,
-          top: -220 + driftY * 0.5,
-          borderRadius: "50%",
-          background:
-            "radial-gradient(ellipse, rgba(14,72,105,0.95) 0%, rgba(8,44,70,0.55) 38%, transparent 68%)",
-          opacity: 0.72 + breathe1 * 0.22,
-          filter: "blur(72px)",
-        }}
-      />
-
-      {/* ── Bright cyan accent — left-center ── */}
-      <div
-        style={{
-          position: "absolute",
-          width: 700,
-          height: 950,
-          left: -180 + driftX2 * 0.4,
-          top: 80 + driftY2 * 0.5,
-          borderRadius: "50%",
-          background:
-            "radial-gradient(ellipse, rgba(38,152,183,0.65) 0%, rgba(18,95,130,0.3) 38%, transparent 65%)",
-          opacity: 0.45 + breathe2 * 0.3,
-          filter: "blur(90px)",
-        }}
-      />
-
-      {/* ── Deep secondary bloom — upper-centre ── */}
-      <div
-        style={{
-          position: "absolute",
-          width: 900,
+          width: 800,
           height: 600,
-          left: 200 + driftX * 0.3,
-          top: -100 + driftY * 0.4,
+          left: -120,
+          top: -80,
           borderRadius: "50%",
           background:
-            "radial-gradient(ellipse, rgba(10,58,88,0.7) 0%, rgba(5,28,48,0.35) 45%, transparent 70%)",
-          opacity: 0.55 + breathe3 * 0.2,
-          filter: "blur(100px)",
+            "radial-gradient(ellipse, rgba(30,140,175,0.10) 0%, transparent 65%)",
+          opacity: 0.3 + breathe * 0.18,
+          filter: "blur(80px)",
+          pointerEvents: "none",
         }}
       />
 
-      {/* ── Dark vignette corners ── */}
+      {/* ── Vignette — deepens corners so it reads as cinematic ── */}
       <div
         style={{
           position: "absolute",
           inset: 0,
           background:
-            "radial-gradient(ellipse 80% 80% at 50% 50%, transparent 38%, rgba(2,6,14,0.82) 100%)",
+            "radial-gradient(ellipse 85% 85% at 50% 50%, transparent 45%, rgba(1,4,10,0.72) 100%)",
+          pointerEvents: "none",
         }}
       />
 
-      {/* ── Subtle specular highlight — upper-left edge ── */}
-      <div
-        style={{
-          position: "absolute",
-          width: 380,
-          height: 480,
-          left: -60 + driftX * 0.2,
-          top: 60 + driftY * 0.3,
-          borderRadius: "50%",
-          background:
-            "radial-gradient(ellipse, rgba(80,200,230,0.18) 0%, transparent 65%)",
-          opacity: 0.5 + breathe1 * 0.4,
-          filter: "blur(40px)",
-        }}
-      />
-
-      {/* ── Animated film grain ── */}
+      {/* ── Film grain pass 1 — coarse, overlay blend ── */}
       <svg
         style={{
           position: "absolute",
@@ -122,14 +90,14 @@ export const MotionBackground: React.FC = () => {
           width: "100%",
           height: "100%",
           mixBlendMode: "overlay",
-          opacity: 0.28,
+          opacity: 0.30,
           pointerEvents: "none",
         }}
       >
         <filter id="grain" x="0%" y="0%" width="100%" height="100%">
           <feTurbulence
             type="fractalNoise"
-            baseFrequency="0.68"
+            baseFrequency="0.66"
             numOctaves="4"
             seed={grainSeed}
             stitchTiles="stitch"
@@ -139,7 +107,7 @@ export const MotionBackground: React.FC = () => {
         <rect width="100%" height="100%" filter="url(#grain)" />
       </svg>
 
-      {/* ── Second grain pass — finer, additive, gives depth ── */}
+      {/* ── Film grain pass 2 — finer, screen blend, lifts mid-tones ── */}
       <svg
         style={{
           position: "absolute",
@@ -147,16 +115,16 @@ export const MotionBackground: React.FC = () => {
           width: "100%",
           height: "100%",
           mixBlendMode: "screen",
-          opacity: 0.06,
+          opacity: 0.07,
           pointerEvents: "none",
         }}
       >
         <filter id="grain2" x="0%" y="0%" width="100%" height="100%">
           <feTurbulence
             type="fractalNoise"
-            baseFrequency="0.82"
+            baseFrequency="0.84"
             numOctaves="2"
-            seed={(grainSeed + 73) % 200}
+            seed={(grainSeed + 61) % 200}
             stitchTiles="stitch"
           />
           <feColorMatrix type="saturate" values="0" />
