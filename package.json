@@ -1,5 +1,23 @@
 {
+  "name": "map-animation",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "remotion studio",
+    "build": "remotion render MapAnimation out/map-animation.mp4",
+    "render": "remotion render MapAnimation out/map-animation.mp4"
+  },
   "dependencies": {
-    "create-videos": "^6.0.3"
+    "@remotion/cli": "^4.0.459",
+    "create-videos": "^6.0.3",
+    "mapbox-gl": "^3.23.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "^4.0.459"
+  },
+  "devDependencies": {
+    "@types/mapbox-gl": "^3.4.1",
+    "@types/react": "^18.3.28",
+    "@types/react-dom": "^18.3.7",
+    "typescript": "^6.0.3"
   }
 }
