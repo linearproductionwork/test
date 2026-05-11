@@ -1,4 +1,4 @@
-import { useCurrentFrame, useVideoConfig, Img, staticFile, interpolate } from "remotion";
+import { useCurrentFrame, useVideoConfig, staticFile, interpolate } from "remotion";
 
 export const MotionBackground: React.FC = () => {
   const frame = useCurrentFrame();
@@ -6,54 +6,64 @@ export const MotionBackground: React.FC = () => {
 
   const t = frame / fps;
 
-  // Slow Ken Burns — barely perceptible zoom, adds life without distraction
+  // Ken Burns — slow zoom, 5% over 10 s
   const scale = interpolate(frame, [0, durationInFrames], [1.0, 1.05], {
     extrapolateRight: "clamp",
   });
 
-  // Very slow drift in image space
-  const driftX = interpolate(frame, [0, durationInFrames], [0, -10], {
-    extrapolateRight: "clamp",
-  });
-  const driftY = interpolate(frame, [0, durationInFrames], [0, 6], {
-    extrapolateRight: "clamp",
-  });
-
-  // Breathing light over the glow region — one slow 6s cycle
+  // Gentle breathing bloom over the image's bright region
   const breathe = Math.sin(t * (1 / 6) * Math.PI * 2) * 0.5 + 0.5;
 
-  // Per-frame grain seed for animated film grain
+  // Per-frame grain seed → animated film grain on every rendered frame
   const grainSeed = frame % 200;
 
   return (
-    // No overflow:hidden here — Remotion's canvas clips to 1920×1080 naturally.
-    // overflow:hidden on the root would clip the portrait wrapper in pre-rotation
-    // layout space, causing the black-bars bug seen in the studio preview.
-    <div style={{ width: "100%", height: "100%", position: "relative", background: "#030810" }}>
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        position: "relative",
+        overflow: "hidden",
+        background: "#030810",
+      }}
+    >
+      {/*
+        SVG handles the rotation internally.
+        Unlike CSS overflow:hidden (which clips at pre-transform layout bounds),
+        SVG viewport clipping is applied to the final rendered position — so the
+        portrait image rotated to landscape fills the canvas with no black bars.
 
-      {/* ── Portrait wrapper, rotated -90° CCW to fill landscape canvas ──
-          1080×1920 centered at canvas origin (960,540) so after rotation
-          it maps exactly onto 1920×1080. Transform-origin is the element's
-          own center, which equals the canvas center. */}
-      <div
+        Ken Burns scale is a CSS transform on the SVG element itself; the root
+        overflow:hidden clips the slight edge-bleed from the zoom.
+      */}
+      <svg
+        width={1920}
+        height={1080}
         style={{
           position: "absolute",
-          width: 1080,
-          height: 1920,
-          left: 420,    // (1920 − 1080) / 2
-          top: -420,    // (1080 − 1920) / 2
-          transformOrigin: "center center",
-          transform: `rotate(-90deg) scale(${scale}) translate(${driftX}px, ${driftY}px)`,
+          left: 0,
+          top: 0,
+          transformOrigin: "960px 540px",
+          transform: `scale(${scale})`,
         }}
       >
-        <Img
-          src={staticFile("bg.jpg")}
-          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        {/*
+          Portrait image (1080 × 1920) centered on canvas (left=420, top=-420),
+          rotated -90 ° CCW around canvas center (960, 540).
+          After rotation its four corners map to (0,0) (1920,0) (1920,1080) (0,1080).
+        */}
+        <image
+          href={staticFile("bg.jpg")}
+          x={420}
+          y={-420}
+          width={1080}
+          height={1920}
+          preserveAspectRatio="xMidYMid slice"
+          transform="rotate(-90, 960, 540)"
         />
-      </div>
+      </svg>
 
-      {/* ── Subtle breathing bloom over the image's bright teal region ──
-          Colour-matched so it feels intrinsic, not overlaid. */}
+      {/* Subtle breathing bloom — colour-matched to the image's teal glow */}
       <div
         style={{
           position: "absolute",
@@ -62,24 +72,26 @@ export const MotionBackground: React.FC = () => {
           left: -160,
           top: -100,
           borderRadius: "50%",
-          background: "radial-gradient(ellipse, rgba(20,130,165,0.09) 0%, transparent 65%)",
+          background:
+            "radial-gradient(ellipse, rgba(20,130,165,0.09) 0%, transparent 65%)",
           opacity: 0.25 + breathe * 0.2,
           filter: "blur(90px)",
           pointerEvents: "none",
         }}
       />
 
-      {/* ── Vignette — deepens corners, keeps focus on the light source ── */}
+      {/* Vignette — darkens corners, keeps focus on the light source */}
       <div
         style={{
           position: "absolute",
           inset: 0,
-          background: "radial-gradient(ellipse 82% 82% at 50% 50%, transparent 42%, rgba(1,4,10,0.75) 100%)",
+          background:
+            "radial-gradient(ellipse 82% 82% at 50% 50%, transparent 42%, rgba(1,4,10,0.75) 100%)",
           pointerEvents: "none",
         }}
       />
 
-      {/* ── Film grain pass 1 — coarse fractalNoise, overlay blend ── */}
+      {/* Film grain pass 1 — coarse, overlay blend */}
       <svg
         style={{
           position: "absolute",
@@ -87,7 +99,7 @@ export const MotionBackground: React.FC = () => {
           width: "100%",
           height: "100%",
           mixBlendMode: "overlay",
-          opacity: 0.30,
+          opacity: 0.3,
           pointerEvents: "none",
         }}
       >
@@ -104,7 +116,7 @@ export const MotionBackground: React.FC = () => {
         <rect width="100%" height="100%" filter="url(#grain)" />
       </svg>
 
-      {/* ── Film grain pass 2 — fine, screen blend, lifts mid-tones ── */}
+      {/* Film grain pass 2 — fine, screen blend, lifts mid-tones */}
       <svg
         style={{
           position: "absolute",
@@ -128,7 +140,6 @@ export const MotionBackground: React.FC = () => {
         </filter>
         <rect width="100%" height="100%" filter="url(#grain2)" />
       </svg>
-
     </div>
   );
 };
